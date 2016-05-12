@@ -19,7 +19,9 @@
   },
   "homepage": "https://github.com/matthew-andrews/isomorphic-fetch/issues",
   "dependencies": {
+    "bluebird": "^3.3.5",
     "node-fetch": "^1.0.1",
+    "redis": "^2.6.0-2",
     "whatwg-fetch": ">=0.10.0"
   },
   "devDependencies": {
