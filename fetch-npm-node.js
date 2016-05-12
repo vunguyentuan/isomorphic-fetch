@@ -3,6 +3,7 @@
 var realFetch = require('node-fetch')
 var redis = require('redis')
 var bluebird = require('bluebird')
+var hash = require('object-hash')
 
 bluebird.promisifyAll(redis.RedisClient.prototype)
 bluebird.promisifyAll(redis.Multi.prototype)
@@ -19,22 +20,42 @@ module.exports = function (url, options) {
     url = 'https:' + url
   }
 
-  var key = url + JSON.stringify(options)
+  if (url.indexOf('theplatform.com') === -1) {
+    return realFetch.call(this, url, options)
+  }
 
-  return client.getAsync(key, function (reply) {
-    if (reply) {
-      return reply
-    } else {
-      return realFetch.call(self, url, options)
-        .then(function (data) {
+  var key = hash([url, options])
+
+  return client.getAsync(key)
+    .then(function (reply) {
+      if (reply) {
+        reply = JSON.parse(reply)
+
+        return {
+          json: function () {
+            return JSON.parse(reply)
+          },
+          status: 200,
+          fromCache: true
+        }
+      } else {
+        return realFetch.call(self, url, options)
+      }
+    })
+    .then(function (data) {
+      if (!data.fromCache) {
+        var dataCloned = data.clone()
+        if (dataCloned.status === 200) {
           // save to redis
-          client.set(key, data)
-          client.expire(key, 120)
+          dataCloned.json().then(function (json) {
+            client.set(key, JSON.stringify(json))
+            client.expire(key, 100)
+          })
+        }
+      }
 
-          return data
-        })
-    }
-  })
+      return data
+    })
 }
 
 if (!global.fetch) {
