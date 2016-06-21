@@ -1,18 +1,10 @@
 'use strict'
 
 var realFetch = require('node-fetch')
-var redis = require('redis')
-var bluebird = require('bluebird')
 var hash = require('object-hash')
-
-bluebird.promisifyAll(redis.RedisClient.prototype)
-bluebird.promisifyAll(redis.Multi.prototype)
-
-var client = redis.createClient() // creates a new client
-
-client.on('connect', function () {
-  console.log('connected')
-})
+var cacheManager = require('cache-manager')
+var Promise = require('bluebird')
+var memoryCache = cacheManager.caching({store: 'memory', max: 100, ttl: 100/*seconds*/})
 
 module.exports = function (url, options) {
   var self = this
@@ -26,14 +18,12 @@ module.exports = function (url, options) {
 
   var key = hash([url, options])
 
-  return client.getAsync(key)
+  return memoryCache.get(key)
     .then(function (reply) {
       if (reply) {
-        reply = JSON.parse(reply)
-
         return {
           json: function () {
-            return JSON.parse(reply)
+            return Promise.resolve(reply)
           },
           status: 200,
           fromCache: true
@@ -48,8 +38,7 @@ module.exports = function (url, options) {
         if (dataCloned.status === 200) {
           // save to redis
           dataCloned.json().then(function (json) {
-            client.set(key, JSON.stringify(json))
-            client.expire(key, 100)
+            memoryCache.set(key, json)
           })
         }
       }
